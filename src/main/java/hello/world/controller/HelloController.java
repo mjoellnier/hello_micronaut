@@ -1,4 +1,4 @@
-package hello.world;
+package hello.world.controller;
 
 import io.micronaut.http.MediaType;
 import io.micronaut.http.annotation.Controller;

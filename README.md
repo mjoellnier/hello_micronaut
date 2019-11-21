@@ -114,54 +114,79 @@ The Micronaut application is deployed with a runnable JAR file. This can be crea
 
 Spring inplements DI via runtime reflection and proxies. Micronaut on the other hand does this via compile time data hence the speed. Micronaut goes even so far to say that it doesn't use any Reflection or exzessive Caching at all -> **Speed**. In general it is possible to use the entire IoC functionality of Micronaut without the framework itself - but this isn't of interest for me so far. But it can be found [here](https://docs.micronaut.io/latest/guide/index.html#inversionofcontrol)
 
+## Bean Scopes
+
+- `@Singleton`: only one instance exists. They are created lazily!
+- `@Context`: the bean is initialized at the same time as the ApplicationContext
+- `@Prototype`: A new bean is created with every injection (this is the default scope and is equivalent with `@Bean`)
+- `@Infrastructure`: A bean that can not be overriden or replaced (via `@Replaces`) as it is system critical
+- `@ThreadLocal`: Associates a bean per thread
+- `@Refreshable`: Allows the bean to be refreshed via `/refresh` endpoint
+- `@RequestScope`: A new bean is created with every HTTP request
+
 ## Defining Beans
 
-According to the docs: Micronaut implements the [JSR-330 (javax.inject)](http://javax-inject.github.io/javax-inject/) - Dependency Injection for Java specification hence to use Micronaut you simply use the [annotations provided by javax.inject](https://docs.oracle.com/javaee/6/api/javax/inject/package-summary.html).
+According to the docs: Micronaut implements the [JSR-330 (javax.inject)](http://javax-inject.github.io/javax-inject/) - Dependency Injection for Java specification hence to use Micronaut you simply use the [annotations provided by javax.inject](https://docs.oracle.com/javaee/6/api/javax/inject/package-summary.html). This also means that the `@Inject` annotation can be used to inject beans at runtime.
 
-A simple example could be:
+Micronaut supports multiple types of dependency injection:
+
+- Constructor injection (must be one public constructor or a single contructor annotated with @Inject)
+- Field injection
+- JavaBean property injection
+- Method parameter injection
+
+## Qualifying by annotation
+
+Besides using the `@Named` annotation you can also use the `@Qualifier` annotation:
 
 ```java
-public interface Engine {
-    int getCylinders();
-    String start();
+import javax.inject.Qualifier;
+import java.lang.annotation.Retention;
+
+import static java.lang.annotation.RetentionPolicy.RUNTIME;
+
+@Qualifier
+@Retention(RUNTIME)
+public @interface V8 {
+}
+```
+
+This can be used via:
+
+```java
+    @Inject Vehicle(@V8 Engine engine) {
+        this.engine = engine;
+    }
+```
+
+## Bean Factories
+
+When using a third party framwork you can't annotate the code. To create beans from this classes you have to use the `@Factory` annotation:
+
+```java
+@Singleton
+class CrankShaft {
 }
 
-@Singleton
-public class V8Engine implements Engine {
+class V8Engine implements Engine {
+    private final int cylinders = 8;
+    private final CrankShaft crankShaft;
+
+    public V8Engine(CrankShaft crankShaft) {
+        this.crankShaft = crankShaft;
+    }
+
     public String start() {
         return "Starting V8";
     }
-
-    public int getCylinders() {
-        return cylinders;
-    }
-
-    public void setCylinders(int cylinders) {
-        this.cylinders = cylinders;
-    }
-
-    private int cylinders = 8;
 }
 
-@Singleton
-public class Vehicle {
-    private final Engine engine;
+@Factory
+class EngineFactory {
 
-    // The Engine is injected via constructor injection
-    public Vehicle(Engine engine) {
-        this.engine = engine;
-    }
-
-    public String start() {
-        return engine.start();
+    @Singleton
+    Engine v8Engine(CrankShaft crankShaft) {
+        return new V8Engine(crankShaft);
     }
 }
-
-public class Runner  {
-    public static void main(String[] args) {
-        Vehicle vehicle = BeanContext.run().getBean(Vehicle.class);
-        System.out.println(vehicle.start());
-    }
-}
-
 ```
