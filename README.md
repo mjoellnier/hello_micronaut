@@ -6,6 +6,11 @@ This is my Micronaut learning projetct. It is mainly based on the [official docs
 
 **Any feedback is highly appreciated!**
 
+Usable commands are:
+
+- `mvn test` to run the test suites
+- `./mvnw clean compile exec:exec` to run the server
+
 ## In General
 
     Micronaut is a modern, JVM-based, full stack microservices framework designed for building modular, easily testable microservice applications.
@@ -189,4 +194,93 @@ class EngineFactory {
         return new V8Engine(crankShaft);
     }
 }
+```
+
+## Bean replacement
+
+According to the docs: One significant difference between Micronaut’s Dependency Injection system and Spring is the way beans can be replaced. In a Spring application, beans have names and can effectively be overridden simply by creating a bean with the same name, regardless of the type of the bean. Spring also has the notion of bean registration order, hence in Spring Boot you have `@AutoConfigureBefore` and `@AutoConfigureAfter` the control how beans override each other.
+
+To avoid these problems, Micronaut’s DI has no concept of bean names or load order. Beans have a type and a Qualifier. You cannot override a bean of a completely different type with another. Micronaut instead offers a `@Replaces` annotation to declare a Bean that overrides another bean of the same type:
+
+```java
+@Singleton
+@Requires(beans = DataSource.class)
+@Requires(property = "datasource.url")
+public class JdbcBookService implements BookService {
+
+    DataSource dataSource;
+
+    public JdbcBookService(DataSource dataSource) {
+        this.dataSource = dataSource;
+    }
+}
+
+@Replaces(JdbcBookService.class)
+@Singleton
+public class MockBookService implements BookService {
+
+    Map<String, Book> bookMap = new LinkedHashMap<>();
+
+    @Override
+    public Book findBook(String title) {
+        return bookMap.get(title);
+    }
+}
+```
+
+You can also think about overriding simply a subset of methods for example in a Factory class. In the following example only the `novel()` method gets overriden, because there is no method in the overriding class that returns a `TextBook`:
+
+```java
+@Factory
+public class BookFactory {
+
+    @Singleton
+    Book novel() {
+        return new Book("A Great Novel");
+    }
+
+    @Singleton
+    TextBook textBook() {
+        return new TextBook("Learning 101");
+    }
+}
+
+@Factory
+@Replaces(factory = BookFactory.class)
+public class CustomBookFactory {
+
+    @Singleton
+    Book otherNovel() {
+        return new Book("An OK Novel");
+    }
+}
+```
+
+## Bean lifecycle
+
+To call a method right after the bean is created, it can be annotated with `@PostConstruct`, to call it right before the bean gets destroyed you can annotade it with `@PreDestroy`.
+
+## Context Events
+
+Micronaut supports a general event system through the context. The ApplicationEventPublisher API is used to publish events and the ApplicationEventListener API is used to listen to events. The event system is not limited to the events that Micronaut publishes and can be used for custom events created by the users.
+
+To publish an event it is enoug to call the `ApplicationEventPublisher` with an defined event object (which can be a simple POJO):
+
+```java
+@Inject
+    ApplicationEventPublisher eventPublisher;
+
+    public void publishSampleEvent() {
+        eventPublisher.publishEvent(new SampleEvent());
+    }
+```
+
+To listen for such events it it sufficient to inject an `EventListener` which can also be annotated with `@Async` to run on its own thread in case the listener method runs some heavy functionality.
+
+```java
+    @EventListener
+    @Async
+    public void onSampleEvent(SampleEvent event) {
+        //do something with the event
+    }
 ```
